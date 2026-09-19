@@ -19,7 +19,7 @@ This is **demo-only identity** and is not production authentication. Valid actor
 | `responder-002` | `RESPONDER` |
 | `admin-001` | `ADMIN` |
 
-Routes that require `X-Demo-Actor` will return `400 BAD_REQUEST` if the header is absent or the actor ID is not a known demo actor.
+Routes that require `X-Demo-Actor` return `400 BAD_REQUEST` when the header is absent. Listing creation additionally rejects actor IDs outside the demo actor map.
 
 ## Error Shape
 
@@ -32,7 +32,6 @@ All error responses use:
 | Code | HTTP Status | Meaning |
 |---|---|---|
 | `BAD_REQUEST` | 400 | Missing or invalid field |
-| `UNAUTHORIZED_ACTOR` | 400 | `X-Demo-Actor` absent or unrecognised |
 | `NOT_FOUND` | 404 | Resource does not exist |
 | `CLAIM_CONFLICT` | 409 | Listing already claimed, cancelled, or expired |
 | `STATUS_CONFLICT` | 409 | Status transition not allowed for this actor/state |
@@ -109,7 +108,7 @@ No auth required.
 
 ## `POST /listings`
 
-Requires `X-Demo-Actor` with a `RESTAURANT` actor.
+Requires `X-Demo-Actor` with a known demo actor ID. Role-specific authorization is not yet enforced for this demo route.
 
 **Request body:**
 ```json
@@ -140,7 +139,7 @@ Requires `X-Demo-Actor` with a `RESTAURANT` actor.
 
 ## `POST /listings/{id}/claim`
 
-Requires `X-Demo-Actor` (any `RESPONDER` actor).
+Requires `X-Demo-Actor`. The atomic conditional write, rather than role validation, currently protects the claim operation.
 
 Atomically claims an available listing using a DynamoDB conditional write. Only one concurrent claim succeeds.
 
@@ -174,6 +173,8 @@ POST /listings/{id}/cancel   — CLAIMED → CANCELLED
 
 ## `GET /profiles`
 
+Handler contract only: this route is not present in the current CDK stack and is not available from `ApiUrl` yet.
+
 No auth required. Returns all seeded responder profiles.
 
 **Response 200:**
@@ -199,6 +200,8 @@ No auth required. Returns all seeded responder profiles.
 
 ## `GET /profiles/{id}`
 
+Handler contract only: this route is not present in the current CDK stack and is not available from `ApiUrl` yet.
+
 No auth required.
 
 **Response 200:** Single `ResponderProfile` object.
@@ -212,7 +215,7 @@ No auth required.
 
 ## `POST /notifications/events`
 
-Internal use — called by backend logic after claim, cancellation, near-expiry, pickup, and delivery-failed events.
+Handler contract only: this route is not present in the current CDK stack, and lifecycle handlers do not emit these events yet.
 
 Requires `X-Demo-Actor`.
 

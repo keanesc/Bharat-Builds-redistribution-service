@@ -166,25 +166,30 @@ test("verify DynamoDB update condition requires existence, AVAILABLE status, and
   assert.ok(capturedInput.ExpressionAttributeValues[":now"]);
 });
 
-test("claim at or after deadline fails with 409 CLAIM_CONFLICT", async () => {
-  // Simulated DynamoDB rejects claim because pickupDeadline > :now fails
-  db.send = (async (command: any) => {
-    const input = command.input;
-    // Condition fails due to expired deadline
-    const err = new Error("Conditional check failed");
-    err.name = "ConditionalCheckFailedException";
-    throw err;
-  }) as any;
+test("claim at or after deadline fails with 409 CLAIM_CONFLICT", async (t) => {
+  for (const deadlineOffsetMs of [0, -1]) {
+    await t.test(deadlineOffsetMs === 0 ? "at deadline" : "after deadline", async () => {
+      db.send = (async (command: any) => {
+        const input = command.input;
+        const now = input.ExpressionAttributeValues[":now"] as string;
+        const pickupDeadline = new Date(new Date(now).getTime() + deadlineOffsetMs).toISOString();
 
-  const event = mockClaimEvent("listing-001", "responder-001");
-  const result = (await claimsHandler(event, dummyContext, dummyCallback)) as any;
+        assert.equal(pickupDeadline > now, false, "DynamoDB pickupDeadline > :now condition must fail");
+        const error = new Error("Conditional check failed");
+        error.name = "ConditionalCheckFailedException";
+        throw error;
+      }) as any;
 
-  assert.equal(result.statusCode, 409);
-  const body = JSON.parse(result.body);
-  assert.deepEqual(body, {
-    error: "CLAIM_CONFLICT",
-    message: "Listing is already claimed, cancelled, or expired"
-  });
+      const event = mockClaimEvent("listing-001", "responder-001");
+      const result = (await claimsHandler(event, dummyContext, dummyCallback)) as any;
+
+      assert.equal(result.statusCode, 409);
+      assert.deepEqual(JSON.parse(result.body), {
+        error: "CLAIM_CONFLICT",
+        message: "Listing is already claimed, cancelled, or expired"
+      });
+    });
+  }
 });
 
 test("successful claim preserves existing history and appends an event with actor and timestamp", async () => {

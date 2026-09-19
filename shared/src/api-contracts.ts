@@ -6,10 +6,7 @@ export const API_ROUTES = {
   listingById: "/listings/:id",
   listingClaim: "/listings/:id/claim",
   listingStatus: "/listings/:id/:action",
-  dashboard: "/dashboard/impact",
-  profiles: "/profiles",
-  profileById: "/profiles/:id",
-  notifications: "/notifications/events"
+  dashboard: "/dashboard/impact"
 } as const;
 
 export const DEMO_ACTORS = {
