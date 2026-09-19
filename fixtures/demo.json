@@ -1,0 +1,51 @@
+{
+  "profiles": [
+    {
+      "id": "responder-001",
+      "name": "Hope Kitchen NGO",
+      "role": "NGO",
+      "latitude": 12.9352,
+      "longitude": 77.6245,
+      "capacityMeals": 50,
+      "foodPreferences": ["VEG", "PACKAGED"],
+      "verified": true
+    },
+    {
+      "id": "responder-002",
+      "name": "Green Route Volunteers",
+      "role": "VOLUNTEER",
+      "latitude": 12.9460,
+      "longitude": 77.6100,
+      "capacityMeals": 25,
+      "foodPreferences": ["VEG", "NON_VEG", "PACKAGED"],
+      "verified": true
+    },
+    {
+      "id": "responder-003",
+      "name": "Neighbourhood Aid",
+      "role": "NGO",
+      "latitude": 13.0200,
+      "longitude": 77.6400,
+      "capacityMeals": 10,
+      "foodPreferences": ["VEG"],
+      "verified": true
+    }
+  ],
+  "restaurants": [
+    { "id": "restaurant-001", "name": "Koramangala Kitchen", "latitude": 12.9352, "longitude": 77.6245 },
+    { "id": "restaurant-002", "name": "Indiranagar Bakes", "latitude": 12.9784, "longitude": 77.6408 },
+    { "id": "restaurant-003", "name": "HSR Community Cafe", "latitude": 12.9116, "longitude": 77.6389 },
+    { "id": "restaurant-004", "name": "Jayanagar Meals", "latitude": 12.9250, "longitude": 77.5938 },
+    { "id": "restaurant-005", "name": "Whitefield Caterers", "latitude": 12.9698, "longitude": 77.7499 }
+  ],
+  "listings": [
+    { "id": "listing-001", "restaurantId": "restaurant-001", "foodDescription": "Packed rice and dal meals", "quantityMeals": 30, "foodCategory": "VEG", "packedMinutesAgo": 5, "pickupWindowMinutes": 45 },
+    { "id": "listing-002", "restaurantId": "restaurant-002", "foodDescription": "Fresh bakery packs", "quantityMeals": 12, "foodCategory": "PACKAGED", "packedMinutesAgo": 10, "pickupWindowMinutes": 60 },
+    { "id": "listing-003", "restaurantId": "restaurant-003", "foodDescription": "Vegetable pulao boxes", "quantityMeals": 20, "foodCategory": "VEG", "packedMinutesAgo": 15, "pickupWindowMinutes": 35 },
+    { "id": "listing-004", "restaurantId": "restaurant-004", "foodDescription": "Mixed meal boxes", "quantityMeals": 18, "foodCategory": "NON_VEG", "packedMinutesAgo": 20, "pickupWindowMinutes": 50 },
+    { "id": "listing-005", "restaurantId": "restaurant-005", "foodDescription": "Corporate lunch surplus", "quantityMeals": 45, "foodCategory": "VEG", "packedMinutesAgo": 10, "pickupWindowMinutes": 90 },
+    { "id": "listing-006", "restaurantId": "restaurant-001", "foodDescription": "Expiring dinner packets", "quantityMeals": 8, "foodCategory": "VEG", "packedMinutesAgo": 35, "pickupWindowMinutes": 10 },
+    { "id": "listing-007", "restaurantId": "restaurant-003", "foodDescription": "Packaged sandwiches", "quantityMeals": 14, "foodCategory": "PACKAGED", "packedMinutesAgo": 5, "pickupWindowMinutes": 50 },
+    { "id": "listing-008", "restaurantId": "restaurant-002", "foodDescription": "Breakfast portions", "quantityMeals": 16, "foodCategory": "VEG", "packedMinutesAgo": 25, "pickupWindowMinutes": 40 }
+  ]
+}

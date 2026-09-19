@@ -1,0 +1,82 @@
+import { randomUUID } from "node:crypto";
+import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
+import { GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import type { CreateListingRequest, SurplusListing } from "@rescue-radius/shared";
+import { haversineDistanceKm } from "../domain/distance.js";
+import { db, listingsTable, statusIndex } from "../lib/db.js";
+import { actorId, badRequest, internalError, json, parseBody } from "../lib/http.js";
+import { statusEvent } from "../domain/status.js";
+
+function isExpired(listing: SurplusListing, now: string): boolean {
+  return listing.pickupDeadline <= now;
+}
+
+export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+  try {
+    const method = event.requestContext.http.method;
+    const id = event.pathParameters?.id;
+
+    if (method === "GET" && id) {
+      const result = await db.send(new GetCommand({ TableName: listingsTable, Key: { id } }));
+      if (!result.Item) return json(404, { error: "NOT_FOUND", message: "Listing not found" });
+      return json(200, result.Item);
+    }
+
+    if (method === "GET") {
+      const query = event.queryStringParameters ?? {};
+      const now = new Date().toISOString();
+      const result = await db.send(new QueryCommand({
+        TableName: listingsTable,
+        IndexName: statusIndex,
+        KeyConditionExpression: "#status = :available",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: { ":available": "AVAILABLE" }
+      }));
+
+      const latitude = Number(query.latitude);
+      const longitude = Number(query.longitude);
+      const radiusKm = Number(query.radiusKm ?? 10);
+      const hasOrigin = Number.isFinite(latitude) && Number.isFinite(longitude);
+
+      const listings = (result.Items as SurplusListing[] | undefined ?? [])
+        .filter((listing) => !isExpired(listing, now))
+        .filter((listing) => !hasOrigin || haversineDistanceKm(
+          { latitude, longitude },
+          { latitude: listing.latitude, longitude: listing.longitude }
+        ) <= radiusKm)
+        .sort((a, b) => a.pickupDeadline.localeCompare(b.pickupDeadline));
+
+      return json(200, { listings });
+    }
+
+    if (method === "POST" && !id) {
+      const body = parseBody<CreateListingRequest>(event);
+      const creator = actorId(event);
+      if (!body.restaurantId || !body.restaurantName || !body.foodDescription || body.quantityMeals <= 0) {
+        return badRequest("restaurantId, restaurantName, foodDescription, and positive quantityMeals are required");
+      }
+      if (!Number.isFinite(body.latitude) || !Number.isFinite(body.longitude)) {
+        return badRequest("latitude and longitude must be valid numbers");
+      }
+      if (new Date(body.pickupDeadline).getTime() <= Date.now()) {
+        return badRequest("pickupDeadline must be in the future");
+      }
+
+      const now = new Date().toISOString();
+      const listing: SurplusListing = {
+        ...body,
+        id: randomUUID(),
+        status: "AVAILABLE",
+        createdAt: now,
+        statusHistory: [statusEvent(null, "AVAILABLE", creator, now)]
+      };
+      await db.send(new PutCommand({ TableName: listingsTable, Item: listing }));
+      return json(201, listing);
+    }
+
+    return json(405, { error: "METHOD_NOT_ALLOWED", message: "Unsupported listings operation" });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("required")) return badRequest(error.message);
+    return internalError(error);
+  }
+};

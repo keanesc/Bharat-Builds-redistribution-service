@@ -1,0 +1,8 @@
+{
+  "app": "npx tsx bin/rescue-radius.ts",
+  "context": {
+    "@aws-cdk/aws-apigateway:usagePlanKeyOrderInsensitiveId": true,
+    "@aws-cdk/aws-lambda:recognizeVersionProps": true,
+    "@aws-cdk/core:enablePartitionLiterals": true
+  }
+}

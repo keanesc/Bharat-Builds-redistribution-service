@@ -1,0 +1,22 @@
+{
+  "name": "@rescue-radius/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/domain/*.test.ts",
+    "seed": "node --import tsx src/seed.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.800.0",
+    "@aws-sdk/lib-dynamodb": "^3.800.0",
+    "@rescue-radius/shared": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.150",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
