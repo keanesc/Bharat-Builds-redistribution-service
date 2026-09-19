@@ -2,7 +2,7 @@ import * as path from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as cdk from "aws-cdk-lib";
-import { aws_apigatewayv2 as apigatewayv2, aws_apigatewayv2_integrations as integrations, aws_dynamodb as dynamodb, aws_logs as logs, aws_lambda as lambda, aws_lambda_nodejs as nodejs } from "aws-cdk-lib";
+import { aws_apigatewayv2 as apigatewayv2, aws_apigatewayv2_integrations as integrations, aws_dynamodb as dynamodb, aws_iam as iam, aws_logs as logs, aws_lambda as lambda, aws_lambda_nodejs as nodejs } from "aws-cdk-lib";
 import { Construct } from "constructs";
 
 export class RescueRadiusStack extends cdk.Stack {
@@ -73,9 +73,30 @@ export class RescueRadiusStack extends cdk.Stack {
       entry: path.join(backendHandlers, "dashboard.ts")
     });
 
+    // Keep each Lambda role scoped to the DynamoDB operations its handler uses.
+    // Health is intentionally data-free and receives no DynamoDB permissions.
+    listings.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["dynamodb:GetItem", "dynamodb:PutItem"],
+      resources: [listingsTable.tableArn]
+    }));
+    listings.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["dynamodb:Query"],
+      resources: [listingsTable.tableArn, `${listingsTable.tableArn}/index/*`]
+    }));
+    claims.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["dynamodb:UpdateItem"],
+      resources: [listingsTable.tableArn]
+    }));
+    status.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["dynamodb:UpdateItem"],
+      resources: [listingsTable.tableArn]
+    }));
+    dashboard.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["dynamodb:Scan"],
+      resources: [listingsTable.tableArn]
+    }));
+
     for (const fn of [health, listings, claims, status, dashboard]) {
-      listingsTable.grantReadWriteData(fn);
-      profilesTable.grantReadData(fn);
       new logs.LogGroup(this, `${fn.node.id}LogGroup`, {
         logGroupName: `/aws/lambda/${fn.functionName}`,
         retention: logs.RetentionDays.ONE_WEEK,

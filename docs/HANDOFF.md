@@ -45,3 +45,22 @@ The key backend acceptance cases are:
 - verify a second claim returns `409`
 - confirm CloudWatch logs exist
 - send the API URL and table names to the team
+
+## Keane to Anirudh: high-risk backend test request
+
+Please add focused backend tests in Anirudh's owned test files for:
+
+1. matching eligibility at the radius, capacity, food-preference, verification, expiry, and travel-window boundaries;
+2. deterministic matching with an injected current time and travel speed;
+3. two concurrent claims producing exactly one success and one `409 CLAIM_CONFLICT`;
+4. rejection of a claim at or after the pickup deadline;
+5. rejection of pickup, delivery, or cancellation by an actor other than `claimedBy`;
+6. successful claim, pickup, delivery, and cancellation appending the expected actor and timestamp to `statusHistory`.
+
+Keane will address failures in the owned matching, status, claim, or DynamoDB files rather than changing Anirudh's tests.
+
+## Deployment and security guardrails
+
+- Do not deploy with the currently active root AWS identity. Configure and verify a named, non-root `rescue-radius` profile for `ap-south-1` first.
+- Run strict synthesis and review `cdk diff` before deployment; do not use hotswap or express deployment modes.
+- Wildcard CORS, fixed table names, seven-day log retention, and `DESTROY` removal policies are hackathon-only choices and must not be represented as production-safe defaults.
