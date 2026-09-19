@@ -81,7 +81,7 @@ export class RescueRadiusStack extends cdk.Stack {
     }));
     listings.addToRolePolicy(new iam.PolicyStatement({
       actions: ["dynamodb:Query"],
-      resources: [listingsTable.tableArn, `${listingsTable.tableArn}/index/*`]
+      resources: [`${listingsTable.tableArn}/index/status-deadline-index`]
     }));
     claims.addToRolePolicy(new iam.PolicyStatement({
       actions: ["dynamodb:UpdateItem"],
