@@ -1,7 +1,15 @@
+import type { Role } from "./types.js";
+
 export const API_ROUTES = {
   health: "/health",
   listings: "/listings",
-  dashboard: "/dashboard/impact"
+  listingById: "/listings/:id",
+  listingClaim: "/listings/:id/claim",
+  listingStatus: "/listings/:id/:action",
+  dashboard: "/dashboard/impact",
+  profiles: "/profiles",
+  profileById: "/profiles/:id",
+  notifications: "/notifications/events"
 } as const;
 
 export const DEMO_ACTORS = {
@@ -10,3 +18,10 @@ export const DEMO_ACTORS = {
   responderB: "responder-002",
   admin: "admin-001"
 } as const;
+
+export const DEMO_ACTOR_ROLES: Record<string, Role> = {
+  "restaurant-001": "RESTAURANT",
+  "responder-001": "RESPONDER",
+  "responder-002": "RESPONDER",
+  "admin-001": "ADMIN"
+};

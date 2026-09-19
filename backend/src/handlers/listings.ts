@@ -2,10 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { CreateListingRequest, SurplusListing } from "@rescue-radius/shared";
+import { DEMO_ACTOR_ROLES } from "@rescue-radius/shared";
 import { haversineDistanceKm } from "../domain/distance.js";
 import { db, listingsTable, statusIndex } from "../lib/db.js";
 import { actorId, badRequest, internalError, json, parseBody } from "../lib/http.js";
 import { statusEvent } from "../domain/status.js";
+
+const VALID_CATEGORIES = ["VEG", "NON_VEG", "PACKAGED"];
 
 function isExpired(listing: SurplusListing, now: string): boolean {
   return listing.pickupDeadline <= now;
@@ -37,6 +40,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       const longitude = Number(query.longitude);
       const radiusKm = Number(query.radiusKm ?? 10);
       const hasOrigin = Number.isFinite(latitude) && Number.isFinite(longitude);
+      const foodCategoryFilter = query.foodCategory as string | undefined;
+      const minQuantity = query.minQuantity ? Number(query.minQuantity) : undefined;
+      const maxMinutes = query.maxMinutesUntilDeadline ? Number(query.maxMinutesUntilDeadline) : undefined;
+      const restaurantIdFilter = query.restaurantId as string | undefined;
 
       const listings = (result.Items as SurplusListing[] | undefined ?? [])
         .filter((listing) => !isExpired(listing, now))
@@ -44,6 +51,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           { latitude, longitude },
           { latitude: listing.latitude, longitude: listing.longitude }
         ) <= radiusKm)
+        .filter((listing) => !foodCategoryFilter || listing.foodCategory === foodCategoryFilter)
+        .filter((listing) => minQuantity === undefined || listing.quantityMeals >= minQuantity)
+        .filter((listing) => maxMinutes === undefined || (new Date(listing.pickupDeadline).getTime() - Date.now()) / 60000 <= maxMinutes)
+        .filter((listing) => !restaurantIdFilter || listing.restaurantId === restaurantIdFilter)
         .sort((a, b) => a.pickupDeadline.localeCompare(b.pickupDeadline));
 
       return json(200, { listings });
@@ -52,11 +63,21 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     if (method === "POST" && !id) {
       const body = parseBody<CreateListingRequest>(event);
       const creator = actorId(event);
+
+      if (!DEMO_ACTOR_ROLES[creator]) {
+        return badRequest("X-Demo-Actor must be a known demo actor ID");
+      }
       if (!body.restaurantId || !body.restaurantName || !body.foodDescription || body.quantityMeals <= 0) {
         return badRequest("restaurantId, restaurantName, foodDescription, and positive quantityMeals are required");
       }
       if (!Number.isFinite(body.latitude) || !Number.isFinite(body.longitude)) {
         return badRequest("latitude and longitude must be valid numbers");
+      }
+      if (!body.foodCategory || !VALID_CATEGORIES.includes(body.foodCategory)) {
+        return badRequest("foodCategory must be VEG, NON_VEG, or PACKAGED");
+      }
+      if (!body.packedAt || isNaN(new Date(body.packedAt).getTime())) {
+        return badRequest("packedAt must be a valid ISO timestamp");
       }
       if (new Date(body.pickupDeadline).getTime() <= Date.now()) {
         return badRequest("pickupDeadline must be in the future");

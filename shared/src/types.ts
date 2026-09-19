@@ -25,6 +25,39 @@ export type StatusEvent = {
   reason?: string;
 };
 
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export type NotificationEventType =
+  | "CLAIMED"
+  | "CANCELLED"
+  | "NEAR_EXPIRY"
+  | "PICKED_UP"
+  | "DELIVERY_FAILED";
+
+export type NotificationEvent = {
+  eventType: NotificationEventType;
+  listingId: string;
+  actorId: string;
+  timestamp: string;
+  payload: {
+    listingTitle: string;
+    quantityMeals: number;
+    restaurantName: string;
+    targetRecipients: string[];
+    metadata?: Record<string, string>;
+  };
+};
+
+export type ListingQueryParams = {
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number;
+  foodCategory?: FoodCategory;
+  minQuantity?: number;
+  maxMinutesUntilDeadline?: number;
+  restaurantId?: string;
+};
+
 export type SurplusListing = {
   id: string;
   restaurantId: string;
@@ -41,6 +74,7 @@ export type SurplusListing = {
   claimedAt?: string;
   createdAt: string;
   statusHistory: StatusEvent[];
+  photoUrl?: string;
 };
 
 export type ResponderProfile = {
@@ -52,6 +86,7 @@ export type ResponderProfile = {
   capacityMeals: number;
   foodPreferences: FoodCategory[];
   verified: boolean;
+  approvalStatus?: ApprovalStatus;
 };
 
 export type CreateListingRequest = {
@@ -64,6 +99,7 @@ export type CreateListingRequest = {
   longitude: number;
   packedAt: string;
   pickupDeadline: string;
+  photoUrl?: string;
 };
 
 export type ImpactDashboard = {
