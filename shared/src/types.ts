@@ -64,8 +64,6 @@ export type SurplusListing = {
   restaurantName: string;
   foodDescription: string;
   quantityMeals: number;
-  quantityRaw?: string;
-  quantityUnit?: string;
   foodCategory: FoodCategory;
   latitude: number;
   longitude: number;
@@ -96,8 +94,6 @@ export type CreateListingRequest = {
   restaurantName: string;
   foodDescription: string;
   quantityMeals: number;
-  quantityRaw?: string;
-  quantityUnit?: string;
   foodCategory: FoodCategory;
   latitude: number;
   longitude: number;

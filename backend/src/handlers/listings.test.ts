@@ -420,6 +420,64 @@ test("GET /listings/{id} returns 404 when listing does not exist", async () => {
   assert.deepEqual(body, { error: "NOT_FOUND", message: "Listing not found" });
 });
 
+test("GET /listings/mine returns restaurant-owned listings newest first across scan pages", async () => {
+  const older = mockListing({ id: "older", restaurantId: "restaurant-001", createdAt: "2026-09-19T10:00:00.000Z" });
+  const newer = mockListing({ id: "newer", restaurantId: "restaurant-001", createdAt: "2026-09-19T12:00:00.000Z" });
+  const other = mockListing({ id: "other", restaurantId: "restaurant-002" });
+  let calls = 0;
+  db.send = (async () => {
+    calls += 1;
+    return calls === 1
+      ? { Items: [older, other], LastEvaluatedKey: { id: "older" } }
+      : { Items: [newer] };
+  }) as any;
+
+  const event = mockApiEvent({
+    method: "GET",
+    path: "/listings/mine",
+    headers: { "x-demo-actor": "restaurant-001" }
+  });
+  const result = (await listingsHandler(event, dummyContext, dummyCallback)) as any;
+  const body = JSON.parse(result.body);
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(calls, 2);
+  assert.deepEqual(body.listings.map((listing: SurplusListing) => listing.id), ["newer", "older"]);
+});
+
+test("GET /listings/mine returns every listing assigned to the responder", async () => {
+  db.send = (async () => ({
+    Items: [
+      mockListing({ id: "claimed", status: "CLAIMED", claimedBy: "responder-001" }),
+      mockListing({ id: "delivered", status: "DELIVERED", claimedBy: "responder-001" }),
+      mockListing({ id: "competitor", status: "CLAIMED", claimedBy: "responder-002" })
+    ]
+  })) as any;
+
+  const event = mockApiEvent({
+    method: "GET",
+    path: "/listings/mine",
+    headers: { "x-demo-actor": "responder-001" }
+  });
+  const result = (await listingsHandler(event, dummyContext, dummyCallback)) as any;
+  const body = JSON.parse(result.body);
+
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(body.listings.map((listing: SurplusListing) => listing.id).sort(), ["claimed", "delivered"]);
+});
+
+test("GET /listings/mine rejects missing, unknown, and admin actors", async () => {
+  for (const [actor, expectedStatus] of [[undefined, 400], ["unknown", 400], ["admin-001", 403]] as const) {
+    const event = mockApiEvent({
+      method: "GET",
+      path: "/listings/mine",
+      headers: actor ? { "x-demo-actor": actor } : undefined
+    });
+    const result = (await listingsHandler(event, dummyContext, dummyCallback)) as any;
+    assert.equal(result.statusCode, expectedStatus);
+  }
+});
+
 test("GET /listings filters expired items and applies query params", async () => {
   const futureDeadline = new Date(Date.now() + 60 * 60_000).toISOString();
   const pastDeadline = new Date(Date.now() - 60 * 60_000).toISOString();
@@ -536,4 +594,3 @@ test("unsupported HTTP method returns 405", async () => {
   const body = JSON.parse(result.body);
   assert.equal(body.error, "METHOD_NOT_ALLOWED");
 });
-

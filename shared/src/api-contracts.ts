@@ -3,10 +3,12 @@ import type { Role } from "./types.js";
 export const API_ROUTES = {
   health: "/health",
   listings: "/listings",
+  myListings: "/listings/mine",
   listingById: "/listings/:id",
   listingClaim: "/listings/:id/claim",
   listingStatus: "/listings/:id/:action",
-  dashboard: "/dashboard/impact"
+  dashboard: "/dashboard/impact",
+  profiles: "/profiles"
 } as const;
 
 export const DEMO_ACTORS = {

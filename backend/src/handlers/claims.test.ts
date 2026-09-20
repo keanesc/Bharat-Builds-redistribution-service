@@ -65,7 +65,7 @@ test("simulates two responders claiming the same available listing; exactly one 
     latitude: 12.9352,
     longitude: 77.6245,
     packedAt: "2026-09-19T10:00:00.000Z",
-    pickupDeadline: "2026-09-19T14:00:00.000Z", // Future deadline
+    pickupDeadline: new Date(Date.now() + 60 * 60_000).toISOString(),
     status: "AVAILABLE",
     createdAt: "2026-09-19T10:00:00.000Z",
     statusHistory: [

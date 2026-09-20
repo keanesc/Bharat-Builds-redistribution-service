@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
-import { GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import type { CreateListingRequest, SurplusListing } from "@rescue-radius/shared";
 import { DEMO_ACTOR_ROLES } from "@rescue-radius/shared";
 import { haversineDistanceKm } from "../domain/distance.js";
@@ -18,6 +18,33 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     const method = event.requestContext.http.method;
     const id = event.pathParameters?.id;
+
+    if (method === "GET" && event.rawPath === "/listings/mine") {
+      const requester = actorId(event);
+      const role = DEMO_ACTOR_ROLES[requester];
+      if (!role) return badRequest("X-Demo-Actor must be a known demo actor ID");
+      if (role === "ADMIN") {
+        return json(403, { error: "FORBIDDEN", message: "Admin actors do not have personal listings" });
+      }
+
+      const items: SurplusListing[] = [];
+      let exclusiveStartKey: Record<string, any> | undefined;
+      do {
+        const result = await db.send(new ScanCommand({
+          TableName: listingsTable,
+          ExclusiveStartKey: exclusiveStartKey
+        }));
+        items.push(...((result.Items as SurplusListing[] | undefined) ?? []));
+        exclusiveStartKey = result.LastEvaluatedKey;
+      } while (exclusiveStartKey);
+
+      const listings = items
+        .filter((listing) => role === "RESTAURANT"
+          ? listing.restaurantId === requester
+          : listing.claimedBy === requester)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return json(200, { listings });
+    }
 
     if (method === "GET" && id) {
       const result = await db.send(new GetCommand({ TableName: listingsTable, Key: { id } }));

@@ -86,7 +86,7 @@ export class RescueRadiusStack extends cdk.Stack {
     // Keep each Lambda role scoped to the DynamoDB operations its handler uses.
     // Health is intentionally data-free and receives no DynamoDB permissions.
     listings.addToRolePolicy(new iam.PolicyStatement({
-      actions: ["dynamodb:GetItem", "dynamodb:PutItem"],
+      actions: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Scan"],
       resources: [listingsTable.tableArn]
     }));
     listings.addToRolePolicy(new iam.PolicyStatement({
@@ -136,6 +136,11 @@ export class RescueRadiusStack extends cdk.Stack {
       path: "/listings",
       methods: [apigatewayv2.HttpMethod.GET, apigatewayv2.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration("ListingsIntegration", listings)
+    });
+    api.addRoutes({
+      path: "/listings/mine",
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: new integrations.HttpLambdaIntegration("MyListingsIntegration", listings)
     });
     api.addRoutes({
       path: "/listings/{id}",

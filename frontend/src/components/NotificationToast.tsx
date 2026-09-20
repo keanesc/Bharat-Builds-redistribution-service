@@ -1,9 +1,8 @@
-import React, { useEffect } from "react";
-import { AlertCircle, CheckCircle, Info, X, AlertTriangle } from "lucide-react";
+import { CheckCircle2, CircleAlert, X } from "lucide-react";
 
 export interface ToastMessage {
   id: string;
-  type: "success" | "error" | "conflict" | "info";
+  type: "success" | "error";
   title: string;
   description?: string;
 }
@@ -13,45 +12,22 @@ interface NotificationToastProps {
   onDismiss: (id: string) => void;
 }
 
-export const NotificationToast: React.FC<NotificationToastProps> = ({ toasts, onDismiss }) => {
-  useEffect(() => {
-    if (!toasts.length || !toasts[0]) return;
-    const firstToastId = toasts[0].id;
-    const timer = setTimeout(() => {
-      onDismiss(firstToastId);
-    }, 6000);
-    return () => clearTimeout(timer);
-  }, [toasts, onDismiss]);
-
-
+export function NotificationToast({ toasts, onDismiss }: NotificationToastProps) {
   if (!toasts.length) return null;
-
   return (
-    <aside className="toast-container" aria-live="polite" aria-label="Notifications">
-      {toasts.map((toast) => {
-        return (
-          <div key={toast.id} className={`toast-card toast-${toast.type}`}>
-            <div className="toast-icon-wrap">
-              {toast.type === "success" && <CheckCircle size={18} className="toast-icon-success" />}
-              {toast.type === "error" && <AlertCircle size={18} className="toast-icon-error" />}
-              {toast.type === "conflict" && <AlertTriangle size={18} className="toast-icon-conflict" />}
-              {toast.type === "info" && <Info size={18} className="toast-icon-info" />}
-            </div>
-            <div className="toast-content">
-              <h4 className="toast-title">{toast.title}</h4>
-              {toast.description && <p className="toast-desc">{toast.description}</p>}
-            </div>
-            <button
-              type="button"
-              className="toast-close-btn"
-              onClick={() => onDismiss(toast.id)}
-              aria-label="Dismiss notification"
-            >
-              <X size={14} />
-            </button>
+    <aside className="toast-region" aria-live="polite" aria-label="Action notifications">
+      {toasts.map((toast) => (
+        <div className={`toast ${toast.type}`} key={toast.id}>
+          {toast.type === "success" ? <CheckCircle2 size={19} /> : <CircleAlert size={19} />}
+          <div>
+            <strong>{toast.title}</strong>
+            {toast.description && <p>{toast.description}</p>}
           </div>
-        );
-      })}
+          <button type="button" aria-label="Dismiss notification" onClick={() => onDismiss(toast.id)}>
+            <X size={16} />
+          </button>
+        </div>
+      ))}
     </aside>
   );
-};
+}

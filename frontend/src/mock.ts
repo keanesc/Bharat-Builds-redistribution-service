@@ -1,9 +1,13 @@
 import type {
   CreateListingRequest,
   ImpactDashboard,
+  ListingQueryParams,
+  ListingStatus,
   ResponderProfile,
+  Role,
   SurplusListing
 } from "../../shared/src/types.js";
+import { DEMO_ACTOR_ROLES } from "../../shared/src/api-contracts.js";
 
 export const DEMO_RESPONDERS: ResponderProfile[] = [
   {
@@ -14,7 +18,8 @@ export const DEMO_RESPONDERS: ResponderProfile[] = [
     longitude: 77.6245,
     capacityMeals: 50,
     foodPreferences: ["VEG", "PACKAGED"],
-    verified: true
+    verified: true,
+    approvalStatus: "APPROVED"
   },
   {
     id: "responder-002",
@@ -24,40 +29,13 @@ export const DEMO_RESPONDERS: ResponderProfile[] = [
     longitude: 77.61,
     capacityMeals: 25,
     foodPreferences: ["VEG", "NON_VEG", "PACKAGED"],
-    verified: true
-  },
-  {
-    id: "responder-003",
-    name: "Neighbourhood Aid",
-    role: "NGO",
-    latitude: 13.02,
-    longitude: 77.64,
-    capacityMeals: 10,
-    foodPreferences: ["VEG"],
-    verified: true
+    verified: true,
+    approvalStatus: "APPROVED"
   }
 ];
 
-export const DEMO_RESTAURANTS = [
-  { id: "restaurant-001", name: "Koramangala Kitchen", latitude: 12.9352, longitude: 77.6245, area: "Koramangala 5th Block" },
-  { id: "restaurant-002", name: "Indiranagar Bakes", latitude: 12.9784, longitude: 77.6408, area: "Indiranagar 100ft Rd" },
-  { id: "restaurant-003", name: "HSR Community Cafe", latitude: 12.9116, longitude: 77.6389, area: "HSR Sector 2" },
-  { id: "restaurant-004", name: "Jayanagar Meals", latitude: 12.925, longitude: 77.5938, area: "Jayanagar 4th Block" },
-  { id: "restaurant-005", name: "Whitefield Caterers", latitude: 12.9698, longitude: 77.7499, area: "Whitefield ITPL Rd" }
-];
-
-export const DEFAULT_RESPONDER: ResponderProfile = DEMO_RESPONDERS[0] ?? {
-  id: "responder-001",
-  name: "Hope Kitchen NGO",
-  role: "NGO",
-  latitude: 12.9352,
-  longitude: 77.6245,
-  capacityMeals: 50,
-  foodPreferences: ["VEG", "PACKAGED"],
-  verified: true
-};
-
-export const DEFAULT_RESTAURANT = DEMO_RESTAURANTS[0] ?? {
+export const DEFAULT_RESPONDER = DEMO_RESPONDERS[0]!;
+export const DEFAULT_RESTAURANT = {
   id: "restaurant-001",
   name: "Koramangala Kitchen",
   latitude: 12.9352,
@@ -65,425 +43,211 @@ export const DEFAULT_RESTAURANT = DEMO_RESTAURANTS[0] ?? {
   area: "Koramangala 5th Block"
 };
 
+function listing(input: Partial<SurplusListing> & Pick<SurplusListing, "id" | "restaurantId" | "restaurantName" | "foodDescription" | "quantityMeals" | "foodCategory" | "latitude" | "longitude">): SurplusListing {
+  const now = Date.now();
+  const createdAt = input.createdAt ?? new Date(now - 10 * 60_000).toISOString();
+  return {
+    packedAt: input.packedAt ?? createdAt,
+    pickupDeadline: input.pickupDeadline ?? new Date(now + 50 * 60_000).toISOString(),
+    status: input.status ?? "AVAILABLE",
+    createdAt,
+    statusHistory: input.statusHistory ?? [{ from: null, to: "AVAILABLE", actorId: input.restaurantId, timestamp: createdAt }],
+    ...input
+  };
+}
 
-function initSeedListings(): SurplusListing[] {
+function initialListings(): SurplusListing[] {
   const now = Date.now();
   return [
-    {
+    listing({
       id: "listing-001",
       restaurantId: "restaurant-001",
       restaurantName: "Koramangala Kitchen",
       foodDescription: "Packed rice and dal meals",
       quantityMeals: 30,
-      quantityRaw: "4kg rice, 3L dal, 2L sambar",
-      quantityUnit: "packs",
       foodCategory: "VEG",
       latitude: 12.9352,
       longitude: 77.6245,
-      packedAt: new Date(now - 8 * 60_000).toISOString(),
-      pickupDeadline: new Date(now + 42 * 60_000).toISOString(),
-      status: "AVAILABLE",
-      createdAt: new Date(now - 8 * 60_000).toISOString(),
-      statusHistory: [
-        {
-          from: null,
-          to: "AVAILABLE",
-          actorId: "restaurant-001",
-          timestamp: new Date(now - 8 * 60_000).toISOString()
-        }
-      ]
-    },
-    {
+      pickupDeadline: new Date(now + 42 * 60_000).toISOString()
+    }),
+    listing({
       id: "listing-002",
       restaurantId: "restaurant-002",
       restaurantName: "Indiranagar Bakes",
-      foodDescription: "Fresh bakery sourdough & croissants",
+      foodDescription: "Fresh bread and bakery packs",
       quantityMeals: 14,
-      quantityRaw: "8 sourdough loaves, 12 croissants, 6 muffins",
-      quantityUnit: "pieces",
       foodCategory: "PACKAGED",
       latitude: 12.9784,
       longitude: 77.6408,
-      packedAt: new Date(now - 15 * 60_000).toISOString(),
-      pickupDeadline: new Date(now + 55 * 60_000).toISOString(),
-      status: "AVAILABLE",
-      createdAt: new Date(now - 15 * 60_000).toISOString(),
-      statusHistory: [
-        {
-          from: null,
-          to: "AVAILABLE",
-          actorId: "restaurant-002",
-          timestamp: new Date(now - 15 * 60_000).toISOString()
-        }
-      ]
-    },
-    {
+      pickupDeadline: new Date(now + 55 * 60_000).toISOString()
+    }),
+    listing({
       id: "listing-003",
       restaurantId: "restaurant-003",
       restaurantName: "HSR Community Cafe",
-      foodDescription: "Vegetable pulao & raita boxes",
+      foodDescription: "Vegetable pulao and raita boxes",
       quantityMeals: 20,
-      quantityRaw: "5kg veg pulao, 2L raita",
-      quantityUnit: "boxes",
       foodCategory: "VEG",
       latitude: 12.9116,
       longitude: 77.6389,
-      packedAt: new Date(now - 30 * 60_000).toISOString(),
-      pickupDeadline: new Date(now + 18 * 60_000).toISOString(),
-      status: "AVAILABLE",
-      createdAt: new Date(now - 30 * 60_000).toISOString(),
-      statusHistory: [
-        {
-          from: null,
-          to: "AVAILABLE",
-          actorId: "restaurant-003",
-          timestamp: new Date(now - 30 * 60_000).toISOString()
-        }
-      ]
-    },
-    {
+      pickupDeadline: new Date(now + 18 * 60_000).toISOString()
+    }),
+    listing({
       id: "listing-004",
-      restaurantId: "restaurant-004",
-      restaurantName: "Jayanagar Meals",
-      foodDescription: "Chicken biryani & curry trays",
-      quantityMeals: 18,
-      quantityRaw: "4kg chicken biryani, 2L curry, 1kg raita",
-      quantityUnit: "trays",
-      foodCategory: "NON_VEG",
-      latitude: 12.925,
-      longitude: 77.5938,
-      packedAt: new Date(now - 12 * 60_000).toISOString(),
-      pickupDeadline: new Date(now + 38 * 60_000).toISOString(),
-      status: "CLAIMED",
-      claimedBy: "responder-002",
-      claimedAt: new Date(now - 4 * 60_000).toISOString(),
-      createdAt: new Date(now - 12 * 60_000).toISOString(),
-      statusHistory: [
-        {
-          from: null,
-          to: "AVAILABLE",
-          actorId: "restaurant-004",
-          timestamp: new Date(now - 12 * 60_000).toISOString()
-        },
-        {
-          from: "AVAILABLE",
-          to: "CLAIMED",
-          actorId: "responder-002",
-          timestamp: new Date(now - 4 * 60_000).toISOString()
-        }
-      ]
-    },
-    {
-      id: "listing-005",
-      restaurantId: "restaurant-005",
-      restaurantName: "Whitefield Caterers",
-      foodDescription: "Corporate buffet surplus — Chapati & Paneer Sabzi",
-      quantityMeals: 45,
-      quantityRaw: "80 chapatis, 5L paneer butter masala, 3kg jeera rice, 2L dal",
-      quantityUnit: "trays",
-      foodCategory: "VEG",
-      latitude: 12.9698,
-      longitude: 77.7499,
-      packedAt: new Date(now - 30 * 60_000).toISOString(),
-      pickupDeadline: new Date(now + 75 * 60_000).toISOString(),
-      status: "PICKED_UP",
-      claimedBy: "responder-001",
-      claimedAt: new Date(now - 22 * 60_000).toISOString(),
-      createdAt: new Date(now - 30 * 60_000).toISOString(),
-      statusHistory: [
-        {
-          from: null,
-          to: "AVAILABLE",
-          actorId: "restaurant-005",
-          timestamp: new Date(now - 30 * 60_000).toISOString()
-        },
-        {
-          from: "AVAILABLE",
-          to: "CLAIMED",
-          actorId: "responder-001",
-          timestamp: new Date(now - 22 * 60_000).toISOString()
-        },
-        {
-          from: "CLAIMED",
-          to: "PICKED_UP",
-          actorId: "responder-001",
-          timestamp: new Date(now - 5 * 60_000).toISOString()
-        }
-      ]
-    },
-    {
-      id: "listing-006",
       restaurantId: "restaurant-001",
       restaurantName: "Koramangala Kitchen",
-      foodDescription: "South Indian tiffin breakfast pack",
+      foodDescription: "South Indian breakfast packs",
       quantityMeals: 24,
-      quantityRaw: "48 idlis, 3L sambar, 1L coconut chutney, 12 vadas",
-      quantityUnit: "packs",
       foodCategory: "VEG",
       latitude: 12.9352,
       longitude: 77.6245,
-      packedAt: new Date(now - 120 * 60_000).toISOString(),
-      pickupDeadline: new Date(now - 10 * 60_000).toISOString(),
       status: "DELIVERED",
       claimedBy: "responder-001",
-      claimedAt: new Date(now - 100 * 60_000).toISOString(),
-      createdAt: new Date(now - 120 * 60_000).toISOString(),
+      claimedAt: new Date(now - 55 * 60_000).toISOString(),
+      createdAt: new Date(now - 70 * 60_000).toISOString(),
+      pickupDeadline: new Date(now - 10 * 60_000).toISOString(),
       statusHistory: [
-        {
-          from: null,
-          to: "AVAILABLE",
-          actorId: "restaurant-001",
-          timestamp: new Date(now - 120 * 60_000).toISOString()
-        },
-        {
-          from: "AVAILABLE",
-          to: "CLAIMED",
-          actorId: "responder-001",
-          timestamp: new Date(now - 100 * 60_000).toISOString()
-        },
-        {
-          from: "CLAIMED",
-          to: "PICKED_UP",
-          actorId: "responder-001",
-          timestamp: new Date(now - 70 * 60_000).toISOString()
-        },
-        {
-          from: "PICKED_UP",
-          to: "DELIVERED",
-          actorId: "responder-001",
-          timestamp: new Date(now - 40 * 60_000).toISOString()
-        }
+        { from: null, to: "AVAILABLE", actorId: "restaurant-001", timestamp: new Date(now - 70 * 60_000).toISOString() },
+        { from: "AVAILABLE", to: "CLAIMED", actorId: "responder-001", timestamp: new Date(now - 55 * 60_000).toISOString() },
+        { from: "CLAIMED", to: "PICKED_UP", actorId: "responder-001", timestamp: new Date(now - 35 * 60_000).toISOString() },
+        { from: "PICKED_UP", to: "DELIVERED", actorId: "responder-001", timestamp: new Date(now - 18 * 60_000).toISOString() }
       ]
-    }
+    })
   ];
 }
 
-let mockStore: SurplusListing[] = initSeedListings();
+let store = initialListings();
 
-export function resetMockData(): void {
-  mockStore = initSeedListings();
+export function resetMockStore(): void {
+  store = initialListings();
 }
 
-export function mockListings(): SurplusListing[] {
-  const currentIso = new Date().toISOString();
-  // Auto-expire listings whose deadline passed and are still AVAILABLE
-  mockStore.forEach((l) => {
-    if (l.status === "AVAILABLE" && l.pickupDeadline <= currentIso) {
-      l.status = "EXPIRED";
-      l.statusHistory.push({
-        from: "AVAILABLE",
-        to: "EXPIRED",
-        actorId: "system",
-        timestamp: currentIso,
-        reason: "Pickup deadline exceeded"
-      });
-    }
-  });
-
-  return [...mockStore];
+function clone<T>(value: T): T {
+  return structuredClone(value);
 }
 
-export function mockCreateListing(input: CreateListingRequest): SurplusListing {
-  const nowIso = new Date().toISOString();
-  const newListing: SurplusListing = {
-    id: `listing-${Date.now().toString(36)}`,
-    restaurantId: input.restaurantId,
-    restaurantName: input.restaurantName,
-    foodDescription: input.foodDescription,
-    quantityMeals: input.quantityMeals,
-    quantityRaw: input.quantityRaw,
-    quantityUnit: input.quantityUnit,
-    foodCategory: input.foodCategory,
-    latitude: input.latitude,
-    longitude: input.longitude,
-    packedAt: input.packedAt,
-    pickupDeadline: input.pickupDeadline,
+function roleFor(actorId: string): Role {
+  const role = DEMO_ACTOR_ROLES[actorId];
+  if (!role) throw new Error("X-Demo-Actor must be a known demo actor ID");
+  return role;
+}
+
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const earthRadius = 6371;
+  const toRadians = (degrees: number) => degrees * Math.PI / 180;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export async function mockGetListings(params: ListingQueryParams): Promise<SurplusListing[]> {
+  const now = Date.now();
+  const originIsValid = Number.isFinite(params.latitude) && Number.isFinite(params.longitude);
+  return clone(store
+    .filter((item) => item.status === "AVAILABLE" && new Date(item.pickupDeadline).getTime() > now)
+    .filter((item) => !params.foodCategory || item.foodCategory === params.foodCategory)
+    .filter((item) => params.minQuantity === undefined || item.quantityMeals >= params.minQuantity)
+    .filter((item) => params.maxMinutesUntilDeadline === undefined
+      || (new Date(item.pickupDeadline).getTime() - now) / 60_000 <= params.maxMinutesUntilDeadline)
+    .filter((item) => !params.restaurantId || item.restaurantId === params.restaurantId)
+    .filter((item) => !originIsValid || distanceKm(
+      params.latitude!,
+      params.longitude!,
+      item.latitude,
+      item.longitude
+    ) <= (params.radiusKm ?? 10))
+    .sort((a, b) => a.pickupDeadline.localeCompare(b.pickupDeadline)));
+}
+
+export async function mockGetMyListings(actorId: string): Promise<SurplusListing[]> {
+  const role = roleFor(actorId);
+  if (role === "ADMIN") throw new Error("Admin actors do not have personal listings");
+  return clone(store
+    .filter((item) => role === "RESTAURANT" ? item.restaurantId === actorId : item.claimedBy === actorId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+}
+
+export async function mockGetProfiles(): Promise<ResponderProfile[]> {
+  return clone(DEMO_RESPONDERS);
+}
+
+export async function mockGetProfile(profileId: string): Promise<ResponderProfile> {
+  const profile = DEMO_RESPONDERS.find((item) => item.id === profileId);
+  if (!profile) throw new Error("Profile not found");
+  return clone(profile);
+}
+
+export async function mockCreateListing(actorId: string, input: CreateListingRequest): Promise<SurplusListing> {
+  roleFor(actorId);
+  const now = new Date().toISOString();
+  const created: SurplusListing = {
+    ...input,
+    id: `listing-${crypto.randomUUID()}`,
     status: "AVAILABLE",
-    createdAt: nowIso,
-    statusHistory: [
-      {
-        from: null,
-        to: "AVAILABLE",
-        actorId: input.restaurantId,
-        timestamp: nowIso
-      }
-    ]
+    createdAt: now,
+    statusHistory: [{ from: null, to: "AVAILABLE", actorId, timestamp: now }]
   };
-
-  mockStore = [newListing, ...mockStore];
-  return newListing;
+  store.unshift(created);
+  return clone(created);
 }
 
-export function mockClaimListing(id: string, actorId: string, partialQty?: number): SurplusListing {
-  const listing = mockStore.find((l) => l.id === id);
-  if (!listing) {
-    throw new Error("Listing not found");
+function transition(listingId: string, actorId: string, from: ListingStatus, to: ListingStatus): SurplusListing {
+  const target = store.find((item) => item.id === listingId);
+  if (!target || target.status !== from || target.claimedBy !== actorId) {
+    throw new Error("Listing status or actor does not allow this transition");
   }
-
-  const nowIso = new Date().toISOString();
-  if (listing.pickupDeadline <= nowIso) {
-    listing.status = "EXPIRED";
-    throw new Error("Listing has expired and cannot be claimed");
-  }
-
-  if (listing.status !== "AVAILABLE") {
-    const claimedByInfo = listing.claimedBy ? `claimed by ${listing.claimedBy}` : `in ${listing.status} state`;
-    throw new Error(`Claim conflict: Listing is no longer available (${claimedByInfo})`);
-  }
-
-  // Support partial meal claiming (conditional decrement)
-  if (partialQty && partialQty > 0 && partialQty < listing.quantityMeals) {
-    const remainingMeals = listing.quantityMeals - partialQty;
-    listing.quantityMeals = remainingMeals; // leaves remainder available
-
-    const claimedListing: SurplusListing = {
-      ...listing,
-      id: `listing-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      quantityMeals: partialQty,
-      status: "CLAIMED",
-      claimedBy: actorId,
-      claimedAt: nowIso,
-      statusHistory: [
-        ...listing.statusHistory,
-        {
-          from: "AVAILABLE",
-          to: "CLAIMED",
-          actorId,
-          timestamp: nowIso
-        }
-      ]
-    };
-    mockStore.unshift(claimedListing);
-    return claimedListing;
-  }
-
-  listing.status = "CLAIMED";
-  listing.claimedBy = actorId;
-  listing.claimedAt = nowIso;
-  listing.statusHistory.push({
-    from: "AVAILABLE",
-    to: "CLAIMED",
-    actorId,
-    timestamp: nowIso
-  });
-
-  return listing;
+  const now = new Date().toISOString();
+  target.status = to;
+  target.statusHistory.push({ from, to, actorId, timestamp: now });
+  return clone(target);
 }
 
-export function mockCancelListing(id: string, actorId: string): SurplusListing {
-  const listing = mockStore.find((l) => l.id === id);
-  if (!listing) throw new Error("Listing not found");
-
-  if (listing.status !== "CLAIMED") {
-    throw new Error("Only claimed listings can be cancelled");
+export async function mockClaimListing(listingId: string, actorId: string): Promise<SurplusListing> {
+  if (roleFor(actorId) !== "RESPONDER") throw new Error("Only responders can claim listings");
+  const target = store.find((item) => item.id === listingId);
+  if (!target || target.status !== "AVAILABLE" || target.pickupDeadline <= new Date().toISOString()) {
+    throw new Error("Listing is already claimed, cancelled, or expired");
   }
-
-  if (listing.claimedBy && listing.claimedBy !== actorId) {
-    throw new Error("Only the assigned responder can cancel this claim");
-  }
-
-  const nowIso = new Date().toISOString();
-  const timeRemaining = new Date(listing.pickupDeadline).getTime() - Date.now();
-
-  // If time still remains (> 5 mins), return to AVAILABLE for reassignment, else mark CANCELLED
-  const nextStatus = timeRemaining > 5 * 60_000 ? "AVAILABLE" : "CANCELLED";
-
-  listing.status = nextStatus;
-  listing.statusHistory.push({
-    from: "CLAIMED",
-    to: nextStatus,
-    actorId,
-    timestamp: nowIso,
-    reason: "Claim cancelled by responder"
-  });
-
-  if (nextStatus === "AVAILABLE") {
-    listing.claimedBy = undefined;
-    listing.claimedAt = undefined;
-  }
-
-  return listing;
+  const now = new Date().toISOString();
+  target.status = "CLAIMED";
+  target.claimedBy = actorId;
+  target.claimedAt = now;
+  target.statusHistory.push({ from: "AVAILABLE", to: "CLAIMED", actorId, timestamp: now });
+  return clone(target);
 }
 
-export function mockPickupListing(id: string, actorId: string): SurplusListing {
-  const listing = mockStore.find((l) => l.id === id);
-  if (!listing) throw new Error("Listing not found");
-
-  if (listing.status !== "CLAIMED") {
-    throw new Error("Listing must be in CLAIMED state to confirm pickup");
-  }
-
-  if (listing.claimedBy && listing.claimedBy !== actorId) {
-    throw new Error("Only the assigned responder can confirm pickup");
-  }
-
-  const nowIso = new Date().toISOString();
-  listing.status = "PICKED_UP";
-  listing.statusHistory.push({
-    from: "CLAIMED",
-    to: "PICKED_UP",
-    actorId,
-    timestamp: nowIso
-  });
-
-  return listing;
+export async function mockCancelListing(listingId: string, actorId: string): Promise<SurplusListing> {
+  return transition(listingId, actorId, "CLAIMED", "CANCELLED");
 }
 
-export function mockDeliverListing(id: string, actorId: string): SurplusListing {
-  const listing = mockStore.find((l) => l.id === id);
-  if (!listing) throw new Error("Listing not found");
-
-  if (listing.status !== "PICKED_UP") {
-    throw new Error("Listing must be PICKED_UP before confirming delivery");
-  }
-
-  if (listing.claimedBy && listing.claimedBy !== actorId) {
-    throw new Error("Only the assigned responder can confirm delivery");
-  }
-
-  const nowIso = new Date().toISOString();
-  listing.status = "DELIVERED";
-  listing.statusHistory.push({
-    from: "PICKED_UP",
-    to: "DELIVERED",
-    actorId,
-    timestamp: nowIso
-  });
-
-  return listing;
+export async function mockPickupListing(listingId: string, actorId: string): Promise<SurplusListing> {
+  return transition(listingId, actorId, "CLAIMED", "PICKED_UP");
 }
 
-export function mockGetDashboard(): ImpactDashboard {
-  const listings = mockStore;
-  const currentIso = new Date().toISOString();
+export async function mockDeliverListing(listingId: string, actorId: string): Promise<SurplusListing> {
+  return transition(listingId, actorId, "PICKED_UP", "DELIVERED");
+}
 
-  const claimDurations = listings.flatMap((l) => {
-    const claimedEvent = l.statusHistory.find((ev) => ev.to === "CLAIMED");
-    if (!claimedEvent) return [];
-    return [(new Date(claimedEvent.timestamp).getTime() - new Date(l.createdAt).getTime()) / 60_000];
+export async function mockGetDashboard(): Promise<ImpactDashboard> {
+  const claimedStatuses: ListingStatus[] = ["CLAIMED", "PICKED_UP", "DELIVERED"];
+  const pickedUpStatuses: ListingStatus[] = ["PICKED_UP", "DELIVERED"];
+  const claimed = store.filter((item) => claimedStatuses.includes(item.status));
+  const pickedUp = store.filter((item) => pickedUpStatuses.includes(item.status));
+  const claimMinutes = store.flatMap((item) => {
+    const event = item.statusHistory.find((entry) => entry.to === "CLAIMED");
+    return event ? [(new Date(event.timestamp).getTime() - new Date(item.createdAt).getTime()) / 60_000] : [];
   });
-
-  const claimedCount = listings.filter((l) => ["CLAIMED", "PICKED_UP", "DELIVERED"].includes(l.status)).length;
-  const pickedUpCount = listings.filter((l) => ["PICKED_UP", "DELIVERED"].includes(l.status)).length;
-
   return {
-    totalMealsListed: listings.reduce((sum, l) => sum + l.quantityMeals, 0),
-    mealsClaimed: listings
-      .filter((l) => ["CLAIMED", "PICKED_UP", "DELIVERED"].includes(l.status))
-      .reduce((sum, l) => sum + l.quantityMeals, 0),
-    mealsPickedUp: listings
-      .filter((l) => ["PICKED_UP", "DELIVERED"].includes(l.status))
-      .reduce((sum, l) => sum + l.quantityMeals, 0),
-    mealsDelivered: listings
-      .filter((l) => l.status === "DELIVERED")
-      .reduce((sum, l) => sum + l.quantityMeals, 0),
-    expiredListings: listings.filter(
-      (l) => l.status === "EXPIRED" || (l.status === "AVAILABLE" && l.pickupDeadline <= currentIso)
-    ).length,
-    averageTimeToClaimMinutes: claimDurations.length
-      ? Math.round((claimDurations.reduce((sum, val) => sum + val, 0) / claimDurations.length) * 10) / 10
-      : 4.5,
-    pickupSuccessRate: claimedCount ? Math.round((pickedUpCount / claimedCount) * 100) / 100 : 0.92
+    totalMealsListed: store.reduce((sum, item) => sum + item.quantityMeals, 0),
+    mealsClaimed: claimed.reduce((sum, item) => sum + item.quantityMeals, 0),
+    mealsPickedUp: pickedUp.reduce((sum, item) => sum + item.quantityMeals, 0),
+    mealsDelivered: store.filter((item) => item.status === "DELIVERED").reduce((sum, item) => sum + item.quantityMeals, 0),
+    expiredListings: store.filter((item) => item.status === "EXPIRED").length,
+    averageTimeToClaimMinutes: claimMinutes.length
+      ? claimMinutes.reduce((sum, minutes) => sum + minutes, 0) / claimMinutes.length
+      : 0,
+    pickupSuccessRate: claimed.length ? pickedUp.length / claimed.length : 0
   };
 }
-

@@ -1,556 +1,201 @@
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import type { CreateListingRequest, FoodCategory, SurplusListing } from "../../../shared/src/types.js";
-import { DEMO_RESTAURANTS, DEFAULT_RESTAURANT } from "../mock.js";
+import { DEFAULT_RESTAURANT } from "../mock.js";
 import { StatusBadge } from "./StatusBadge.js";
-import {
-  Utensils,
-  PlusCircle,
-  Clock,
-  ShieldCheck,
-  CheckCircle,
-  Leaf,
-  Drumstick,
-  Package,
-  Radio,
-  TrendingUp,
-  AlertCircle,
-  Heart
-} from "lucide-react";
 
 interface RestaurantViewProps {
-  actorId: string;
   listings: SurplusListing[];
-  onSubmitListing: (input: CreateListingRequest) => Promise<void>;
-  onSelectListing: (id: string) => void;
-  onPickup?: (listing: SurplusListing) => Promise<void>;
+  loading: boolean;
+  error: string | null;
+  onSubmit: (input: CreateListingRequest) => Promise<void>;
+  onRetry: () => void;
 }
 
-const PRESETS = [
-  { desc: "South Indian Rice, Sambar & Dal", cat: "VEG" as FoodCategory, qty: 30, mins: 45, raw: "4kg rice, 3L sambar, 2L dal", unit: "packs" },
-  { desc: "Fresh Bakery Breads & Pastries", cat: "PACKAGED" as FoodCategory, qty: 16, mins: 60, raw: "8 sourdough loaves, 12 croissants, 6 muffins", unit: "pieces" },
-  { desc: "Vegetable Pulao & Raita", cat: "VEG" as FoodCategory, qty: 20, mins: 40, raw: "5kg veg pulao, 2L raita", unit: "boxes" },
-  { desc: "Chicken Biryani & Salan", cat: "NON_VEG" as FoodCategory, qty: 25, mins: 45, raw: "6kg biryani, 2L salan, 1kg raita", unit: "packs" },
-  { desc: "Corporate Buffet Surplus", cat: "VEG" as FoodCategory, qty: 45, mins: 75, raw: "80 chapatis, 5L paneer masala, 3kg jeera rice", unit: "trays" }
-];
+type FieldErrors = Partial<Record<"description" | "quantity" | "packedAt" | "deadline" | "safety", string>>;
 
-export const RestaurantView: React.FC<RestaurantViewProps> = ({
-  actorId,
-  listings,
-  onSubmitListing,
-  onSelectListing,
-  onPickup
-}) => {
-  const currentRestaurant = DEMO_RESTAURANTS.find((r) => r.id === actorId) ?? DEFAULT_RESTAURANT;
+function localInputValue(date: Date): string {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
 
-  const [description, setDescription] = useState("South Indian Rice, Sambar & Dal Meals");
-  const [quantityRaw, setQuantityRaw] = useState("5kg rice, 3L sambar, 2L dal");
-  const [quantityUnit, setQuantityUnit] = useState("packs");
-  const [quantity, setQuantity] = useState<number>(25);
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function lastTransition(listing: SurplusListing): string | null {
+  const event = listing.statusHistory.at(-1);
+  return event ? formatDate(event.timestamp) : null;
+}
+
+function ListingRow({ listing }: { listing: SurplusListing }) {
+  return (
+    <article className="history-row">
+      <div className="history-main">
+        <div className="history-title">
+          <h3>{listing.foodDescription}</h3>
+          <StatusBadge status={listing.status} />
+        </div>
+        <p>{listing.quantityMeals} meals · {listing.foodCategory.replace("_", "-").toLowerCase()}</p>
+      </div>
+      <dl className="history-details">
+        <div><dt>Pickup deadline</dt><dd>{formatDate(listing.pickupDeadline)}</dd></div>
+        {listing.claimedBy && <div><dt>Responder</dt><dd>{listing.claimedBy}</dd></div>}
+        {lastTransition(listing) && <div><dt>Last update</dt><dd>{lastTransition(listing)}</dd></div>}
+      </dl>
+    </article>
+  );
+}
+
+export function RestaurantView({ listings, loading, error, onSubmit, onRetry }: RestaurantViewProps) {
+  const [description, setDescription] = useState("");
   const [category, setCategory] = useState<FoodCategory>("VEG");
-  const [pickupWindowMinutes, setPickupWindowMinutes] = useState<number>(45);
-  const [safeSurplusDeclared, setSafeSurplusDeclared] = useState(false);
+  const [quantity, setQuantity] = useState(20);
+  const [packedAt, setPackedAt] = useState(() => localInputValue(new Date()));
+  const [deadline, setDeadline] = useState(() => localInputValue(new Date(Date.now() + 45 * 60_000)));
+  const [safetyAccepted, setSafetyAccepted] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const active = useMemo(
+    () => listings.filter((item) => ["AVAILABLE", "CLAIMED", "PICKED_UP"].includes(item.status)),
+    [listings]
+  );
+  const completed = useMemo(
+    () => listings.filter((item) => ["DELIVERED", "CANCELLED", "EXPIRED"].includes(item.status)),
+    [listings]
+  );
 
-  const [dispatchesTab, setDispatchesTab] = useState<"ALL" | "ACTIVE" | "COMPLETED">("ALL");
-
-  // Filter listings for this specific restaurant
-  const restaurantListings = listings.filter((l) => l.restaurantId === currentRestaurant.id);
-  const activeListings = restaurantListings.filter((l) => ["AVAILABLE", "CLAIMED", "PICKED_UP"].includes(l.status));
-  const deliveredListings = restaurantListings.filter((l) => l.status === "DELIVERED");
-  const totalMealsRescued = deliveredListings.reduce((sum, l) => sum + l.quantityMeals, 0);
-
-  const displayedListings = dispatchesTab === "ACTIVE"
-    ? activeListings
-    : dispatchesTab === "COMPLETED"
-    ? deliveredListings
-    : restaurantListings;
-
-  const formatRelativeClock = (mins: number) => {
-    const d = new Date(Date.now() + mins * 60_000);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const applyPreset = (preset: (typeof PRESETS)[0]) => {
-    setDescription(preset.desc);
-    setCategory(preset.cat);
-    setQuantity(preset.qty);
-    setPickupWindowMinutes(preset.mins);
-    setQuantityRaw(preset.raw);
-    setQuantityUnit(preset.unit);
-  };
-
-  const handleDirectSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-
-    if (!description.trim()) {
-      setFormError("Please enter a description for the surplus food.");
-      return;
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const errors: FieldErrors = {};
+    const packedDate = new Date(packedAt);
+    const deadlineDate = new Date(deadline);
+    if (!description.trim()) errors.description = "Describe the food being offered.";
+    if (!Number.isFinite(quantity) || quantity <= 0) errors.quantity = "Enter a positive meal count.";
+    if (Number.isNaN(packedDate.getTime())) errors.packedAt = "Enter a valid packed time.";
+    if (Number.isNaN(deadlineDate.getTime()) || deadlineDate.getTime() <= Date.now()) {
+      errors.deadline = "Pickup deadline must be in the future.";
     }
-    if (quantity <= 0) {
-      setFormError("Quantity must be at least 1 meal.");
-      return;
-    }
-    if (!safeSurplusDeclared) {
-      setFormError("Please tap the Safe Surplus Pledge ritual checkbox below to certify food safety before publishing.");
-      return;
-    }
+    if (!safetyAccepted) errors.safety = "Confirm the donor safety declaration.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
 
+    setSubmitting(true);
     try {
-      setIsSubmitting(true);
-      const now = Date.now();
-      const packedAtIso = new Date(now - 10 * 60_000).toISOString();
-      const deadlineIso = new Date(now + pickupWindowMinutes * 60_000).toISOString();
-
-      const newListingPayload: CreateListingRequest = {
-        restaurantId: currentRestaurant.id,
-        restaurantName: currentRestaurant.name,
+      await onSubmit({
+        restaurantId: DEFAULT_RESTAURANT.id,
+        restaurantName: DEFAULT_RESTAURANT.name,
         foodDescription: description.trim(),
         quantityMeals: quantity,
-        quantityRaw: quantityRaw.trim() || undefined,
-        quantityUnit: quantityUnit || undefined,
         foodCategory: category,
-        latitude: currentRestaurant.latitude,
-        longitude: currentRestaurant.longitude,
-        packedAt: packedAtIso,
-        pickupDeadline: deadlineIso
-      };
-
-      await onSubmitListing(newListingPayload);
-
-      // Reset form
-      setDescription("South Indian Rice, Sambar & Dal Meals");
-      setQuantityRaw("5kg rice, 3L sambar, 2L dal");
-      setQuantityUnit("packs");
-      setQuantity(25);
-      setSafeSurplusDeclared(false);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to publish listing");
+        latitude: DEFAULT_RESTAURANT.latitude,
+        longitude: DEFAULT_RESTAURANT.longitude,
+        packedAt: packedDate.toISOString(),
+        pickupDeadline: deadlineDate.toISOString()
+      });
+      setDescription("");
+      setSafetyAccepted(false);
+      setPackedAt(localInputValue(new Date()));
+      setDeadline(localInputValue(new Date(Date.now() + 45 * 60_000)));
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="restaurant-view-container">
-      {/* Restaurant Profile Summary Header */}
-      <div className="restaurant-profile-header">
-        <div className="profile-identity">
-          <div className="restaurant-avatar">
-            <Utensils size={24} />
-          </div>
+    <div className="restaurant-grid">
+      <section className="panel form-panel" aria-labelledby="create-heading">
+        <div className="section-header">
           <div>
-            <div className="profile-title-row">
-              <h2 className="profile-name">{currentRestaurant.name}</h2>
-              <span className="verified-badge">
-                <ShieldCheck size={14} />
-                <span>FSSAI Partner Kitchen</span>
-              </span>
-            </div>
-            <p className="profile-subtitle">
-              📍 {currentRestaurant.area} • GPS: ({currentRestaurant.latitude.toFixed(4)}, {currentRestaurant.longitude.toFixed(4)})
-            </p>
+            <h1 id="create-heading">Create listing</h1>
+            <p>{DEFAULT_RESTAURANT.name} · {DEFAULT_RESTAURANT.area}</p>
           </div>
         </div>
 
-        <div className="restaurant-metrics-mini">
-          <div className="metric-pill">
-            <TrendingUp size={16} className="metric-icon" />
-            <div>
-              <strong className="metric-val">{totalMealsRescued}</strong>
-              <span className="metric-label">Servings Rescued</span>
-            </div>
-          </div>
-          <div className="metric-pill">
-            <Heart size={16} className="metric-icon icon-heart" />
-            <div>
-              <strong className="metric-val">{deliveredListings.length}</strong>
-              <span className="metric-label">Completed Drops</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="restaurant-grid-layout">
-        {/* Single-Screen Fast Post Form */}
-        <section className="form-card-panel">
-          <div className="card-header-row">
-            <div>
-              <h3 className="card-section-title">Post Surplus Food</h3>
-              <p className="card-section-desc">Broadcast unserved food to verified Bengaluru NGOs in under 30 seconds.</p>
-            </div>
+        <form onSubmit={submit} noValidate>
+          <div className="field">
+            <label htmlFor="food-description">Food description</label>
+            <textarea
+              id="food-description"
+              rows={3}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              aria-invalid={Boolean(fieldErrors.description)}
+              aria-describedby={fieldErrors.description ? "description-error" : undefined}
+              placeholder="For example, packed rice and dal meals"
+            />
+            {fieldErrors.description && <span className="field-error" id="description-error">{fieldErrors.description}</span>}
           </div>
 
-          {/* Quick Presets for 1-Tap Entry */}
-          <div className="presets-bar">
-            <span className="presets-label">⚡ 1-Tap Presets:</span>
-            <div className="presets-scroll">
-              {PRESETS.map((p, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className="preset-chip"
-                  onClick={() => applyPreset(p)}
-                >
-                  {p.cat === "VEG" ? "🥗" : p.cat === "NON_VEG" ? "🍗" : "🍞"} {p.desc.split(" ")[0]} ({p.qty})
-                </button>
-              ))}
+          <div className="form-row">
+            <div className="field">
+              <label htmlFor="food-category">Category</label>
+              <select id="food-category" value={category} onChange={(event) => setCategory(event.target.value as FoodCategory)}>
+                <option value="VEG">Vegetarian</option>
+                <option value="NON_VEG">Non-vegetarian</option>
+                <option value="PACKAGED">Packaged</option>
+              </select>
             </div>
-          </div>
-
-          <form onSubmit={handleDirectSubmit} className="surplus-create-form">
-            {formError && (
-              <div className="form-error-banner">
-                <AlertCircle size={16} />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            {/* Food Description */}
-            <div className="form-field-group">
-              <label htmlFor="food-desc" className="form-label">
-                What's the food? *
-              </label>
+            <div className="field">
+              <label htmlFor="meal-count">Meal count</label>
               <input
-                id="food-desc"
-                type="text"
-                className="text-input"
-                placeholder="e.g. Steamed rice, dal tadka, and mixed vegetable poriyal"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
+                id="meal-count"
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(event) => setQuantity(Number(event.target.value))}
+                aria-invalid={Boolean(fieldErrors.quantity)}
               />
-            </div>
-
-            {/* Raw Quantity — what the restaurant actually has */}
-            <div className="form-row-duo">
-              <div className="form-field-group">
-                <label htmlFor="qty-raw" className="form-label">
-                  What quantities? *
-                </label>
-                <input
-                  id="qty-raw"
-                  type="text"
-                  className="text-input"
-                  placeholder="e.g. 5kg rice, 3L sambar, 30 rotis"
-                  value={quantityRaw}
-                  onChange={(e) => setQuantityRaw(e.target.value)}
-                />
-              </div>
-              <div className="form-field-group">
-                <label htmlFor="qty-unit" className="form-label">
-                  Packed as
-                </label>
-                <select
-                  id="qty-unit"
-                  className="text-input"
-                  value={quantityUnit}
-                  onChange={(e) => setQuantityUnit(e.target.value)}
-                >
-                  <option value="packs">Packs / Boxes</option>
-                  <option value="trays">Trays / Containers</option>
-                  <option value="pieces">Individual pieces</option>
-                  <option value="kg">Loose (kg / litres)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Category 3 Large Tap Targets */}
-            <div className="form-field-group">
-              <label className="form-label">Dietary Category *</label>
-              <div className="dietary-selector">
-                <button
-                  type="button"
-                  className={`dietary-btn veg-btn ${category === "VEG" ? "selected" : ""}`}
-                  onClick={() => setCategory("VEG")}
-                >
-                  <Leaf size={16} />
-                  <span>Veg</span>
-                </button>
-                <button
-                  type="button"
-                  className={`dietary-btn nonveg-btn ${category === "NON_VEG" ? "selected" : ""}`}
-                  onClick={() => setCategory("NON_VEG")}
-                >
-                  <Drumstick size={16} />
-                  <span>Non-Veg</span>
-                </button>
-                <button
-                  type="button"
-                  className={`dietary-btn packaged-btn ${category === "PACKAGED" ? "selected" : ""}`}
-                  onClick={() => setCategory("PACKAGED")}
-                >
-                  <Package size={16} />
-                  <span>Dry / Bakery</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Estimated Servings & Deadline */}
-            <div className="form-row-duo">
-              <div className="form-field-group">
-                <label className="form-label">Feeds approx. how many people? *</label>
-                <div className="quantity-stepper-wrap">
-                  <button
-                    type="button"
-                    className="stepper-btn stepper-sub"
-                    onClick={() => setQuantity(Math.max(1, quantity - 5))}
-                    title="Reduce 5"
-                  >
-                    -5
-                  </button>
-                  <div className="stepper-center-badge">
-                    <input
-                      type="number"
-                      min="1"
-                      className="stepper-direct-input"
-                      value={quantity}
-                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    />
-                    <span className="stepper-unit-lbl">people</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="stepper-btn stepper-add"
-                    onClick={() => setQuantity(quantity + 5)}
-                    title="Add 5"
-                  >
-                    +5
-                  </button>
-                  <button
-                    type="button"
-                    className="stepper-btn stepper-add-bulk"
-                    onClick={() => setQuantity(quantity + 20)}
-                    title="Add 20"
-                  >
-                    +20
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-field-group">
-                <label className="form-label">Pickup Deadline *</label>
-                <div className="window-pill-selector">
-                  {[30, 45, 60, 90].map((mins) => (
-                    <button
-                      key={mins}
-                      type="button"
-                      className={`window-pill ${pickupWindowMinutes === mins ? "active" : ""}`}
-                      onClick={() => setPickupWindowMinutes(mins)}
-                    >
-                      <span className="window-mins-lead">+{mins}m</span>
-                      <span className="window-clock-sub">({formatRelativeClock(mins)})</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Ritual of Donating: Warm, Empowering Safety Confirmation */}
-            <div className={`donation-ritual-card ${!safeSurplusDeclared ? "pledge-pending" : "pledge-signed"}`}>
-              <label className="ritual-checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={safeSurplusDeclared}
-                  onChange={(e) => setSafeSurplusDeclared(e.target.checked)}
-                  required
-                />
-                <div className="ritual-text">
-                  <strong>Safe Surplus Pledge (Tap to certify)</strong>
-                  <span>
-                    I confirm this surplus is freshly prepared, untouched, stored in clean food-grade containers, and ready for immediate consumption within {pickupWindowMinutes} minutes ({formatRelativeClock(pickupWindowMinutes)}).
-                  </span>
-                </div>
-              </label>
-            </div>
-
-            <button type="submit" className="submit-listing-btn" disabled={isSubmitting}>
-              <PlusCircle size={18} />
-              <span>{isSubmitting ? "Broadcasting..." : `Publish — feeds ~${quantity} people`}</span>
-            </button>
-          </form>
-        </section>
-
-        {/* Live Dispatches Timeline */}
-        <section className="restaurant-history-panel">
-          <div className="card-header-row">
-            <div>
-              <h3 className="card-section-title">Your Dispatches & Status</h3>
-              <p className="card-section-desc">Track real-time volunteer pickup progression.</p>
-            </div>
-            {/* Filter Tabs to Prevent Unbounded Growth */}
-            <div className="dispatches-tab-group">
-              <button
-                type="button"
-                className={`dispatch-tab-btn ${dispatchesTab === "ALL" ? "active" : ""}`}
-                onClick={() => setDispatchesTab("ALL")}
-              >
-                All ({restaurantListings.length})
-              </button>
-              <button
-                type="button"
-                className={`dispatch-tab-btn ${dispatchesTab === "ACTIVE" ? "active" : ""}`}
-                onClick={() => setDispatchesTab("ACTIVE")}
-              >
-                Active ({activeListings.length})
-              </button>
-              <button
-                type="button"
-                className={`dispatch-tab-btn ${dispatchesTab === "COMPLETED" ? "active" : ""}`}
-                onClick={() => setDispatchesTab("COMPLETED")}
-              >
-                Done ({deliveredListings.length})
-              </button>
+              {fieldErrors.quantity && <span className="field-error">{fieldErrors.quantity}</span>}
             </div>
           </div>
 
-          {displayedListings.length === 0 ? (
-            <div className="empty-state-card">
-              <Utensils size={36} className="empty-icon" />
-              <h4>No dispatches in this view</h4>
-              <p>{dispatchesTab === "COMPLETED" ? "Completed drop-offs will appear here." : "Post your first batch using the form on the left."}</p>
+          <div className="form-row">
+            <div className="field">
+              <label htmlFor="packed-at">Packed at</label>
+              <input id="packed-at" type="datetime-local" value={packedAt} onChange={(event) => setPackedAt(event.target.value)} />
+              {fieldErrors.packedAt && <span className="field-error">{fieldErrors.packedAt}</span>}
             </div>
-          ) : (
-            <div className="restaurant-listings-list-scroll">
-              {displayedListings.map((listing) => {
-                const remainingMins = Math.max(
-                  0,
-                  Math.round((new Date(listing.pickupDeadline).getTime() - Date.now()) / 60_000)
-                );
-                const isDelivered = listing.status === "DELIVERED";
-
-                // Accurate step index progression (1: Posted, 2: Claimed, 3: Picked Up, 4: Delivered)
-                const stepIndex =
-                  listing.status === "DELIVERED" ? 4 :
-                  listing.status === "PICKED_UP" ? 3 :
-                  listing.status === "CLAIMED" ? 2 : 1;
-
-                // Visually quiet completed cards
-                if (isDelivered) {
-                  const dietIcon = listing.foodCategory === "VEG" ? "🥗" : listing.foodCategory === "NON_VEG" ? "🍗" : "🍞";
-                  return (
-                    <article
-                      key={listing.id}
-                      className="restaurant-listing-card card-completed-quiet"
-                      onClick={() => onSelectListing(listing.id)}
-                    >
-                      <div className="completed-card-header">
-                        <div className="completed-title-wrap">
-                          <span className="diet-mini-icon">{dietIcon}</span>
-                          <h4 className="completed-listing-title">{listing.foodDescription}</h4>
-                        </div>
-                        <span className="completed-meals-badge">feeds {listing.quantityMeals}</span>
-                      </div>
-                      <div className="completed-meta-row">
-                        <span className="completed-verdict-text">✓ Rescued & Delivered to Shelter</span>
-                        <span className="completed-time-text">
-                          Assigned: {listing.claimedBy || "NGO Volunteer"} · {new Date(listing.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                    </article>
-                  );
-                }
-
-                // Active Dispatches (AVAILABLE, CLAIMED, PICKED_UP)
-                return (
-                  <article
-                    key={listing.id}
-                    className={`restaurant-listing-card status-border-${listing.status.toLowerCase()}`}
-                    onClick={() => onSelectListing(listing.id)}
-                  >
-                    <div className="listing-card-header">
-                      <div>
-                        <div className="tag-and-time">
-                          <span className={`cat-pill ${listing.foodCategory.toLowerCase()}`}>
-                            {listing.foodCategory}
-                          </span>
-                          <span className="time-subtle">
-                            {new Date(listing.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
-                        <h4 className="listing-title">{listing.foodDescription}</h4>
-                      </div>
-                      <div className="meals-badge">
-                        <strong>{listing.quantityMeals}</strong>
-                        <span>feeds</span>
-                      </div>
-                    </div>
-
-                    <div className="listing-status-row">
-                      {listing.status === "AVAILABLE" ? (
-                        <span className="restaurant-live-pill">🟢 LIVE · BROADCASTING</span>
-                      ) : (
-                        <StatusBadge status={listing.status} />
-                      )}
-                      <div className="deadline-time-text">
-                        {listing.status === "AVAILABLE" && `⏳ ${remainingMins}m safe window (until ${new Date(listing.pickupDeadline).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`}
-                        {listing.status === "CLAIMED" && `Assigned: ${listing.claimedBy}`}
-                        {listing.status === "PICKED_UP" && "In transit with volunteer"}
-                      </div>
-                    </div>
-
-                    {/* Kitchen Pickup Handshake (FR-008 verification) */}
-                    {listing.status === "CLAIMED" && (
-                      <div className="kitchen-pickup-verify-box">
-                        <div className="verify-box-header">
-                          <span className="verify-volunteer-lead">
-                            🔑 Volunteer Arrived: <strong>{listing.claimedBy}</strong>
-                          </span>
-                          <span className="verify-otp-tag">Expected Verbal OTP: <strong>8492</strong></span>
-                        </div>
-                        <p className="verify-instruction">
-                          Ask volunteer for their 4-digit verbal OTP or scan their app QR before releasing containers.
-                        </p>
-                        <div className="verify-actions-row">
-                          <button
-                            type="button"
-                            className="verify-otp-handover-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onPickup) {
-                                void onPickup(listing);
-                              }
-                            }}
-                          >
-                            <CheckCircle size={15} />
-                            <span>Verify Code (8492) & Authorize Kitchen Handover</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Visual Horizontal Progress Track with Mathematically Correct Progression */}
-                    <div className="mini-journey-stepper">
-                      <div className={`step-node ${stepIndex >= 1 ? "done" : ""}`}>
-                        <span className="dot" />
-                        <span className="lbl">Posted</span>
-                      </div>
-                      <div className={`step-line ${stepIndex >= 2 ? "active" : ""}`} />
-                      <div className={`step-node ${stepIndex >= 2 ? "done" : ""}`}>
-                        <span className="dot" />
-                        <span className="lbl">Claimed</span>
-                      </div>
-                      <div className={`step-line ${stepIndex >= 3 ? "active" : ""}`} />
-                      <div className={`step-node ${stepIndex >= 3 ? "done" : ""}`}>
-                        <span className="dot" />
-                        <span className="lbl">Picked Up</span>
-                      </div>
-                      <div className={`step-line ${stepIndex >= 4 ? "active" : ""}`} />
-                      <div className={`step-node ${stepIndex >= 4 ? "done" : ""}`}>
-                        <span className="dot" />
-                        <span className="lbl">Delivered</span>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+            <div className="field">
+              <label htmlFor="pickup-deadline">Pickup deadline</label>
+              <input id="pickup-deadline" type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
+              {fieldErrors.deadline && <span className="field-error">{fieldErrors.deadline}</span>}
             </div>
-          )}
-        </section>
-      </div>
+          </div>
+
+          <label className="check-field">
+            <input type="checkbox" checked={safetyAccepted} onChange={(event) => setSafetyAccepted(event.target.checked)} />
+            <span>I confirm this is unserved surplus food and the pickup window reflects our handling requirements.</span>
+          </label>
+          {fieldErrors.safety && <span className="field-error safety-error">{fieldErrors.safety}</span>}
+
+          <button className="button primary submit-button" type="submit" disabled={submitting}>
+            {submitting ? "Publishing…" : "Publish listing"}
+          </button>
+        </form>
+      </section>
+
+      <section className="panel history-panel" aria-labelledby="history-heading">
+        <div className="section-header">
+          <div>
+            <h2 id="history-heading">Your listings</h2>
+            <p>Current pickup progress and completed records.</p>
+          </div>
+        </div>
+        {error && <div className="inline-error">{error}<button type="button" onClick={onRetry}>Retry</button></div>}
+        {loading && !listings.length ? <div className="skeleton-list" aria-label="Loading listings"><i /><i /><i /></div> : (
+          <>
+            <div className="history-group">
+              <h3>Active listings</h3>
+              {active.length ? active.map((item) => <ListingRow key={item.id} listing={item} />) : <p className="empty-copy">No active listings.</p>}
+            </div>
+            <div className="history-group">
+              <h3>Closed listings</h3>
+              {completed.length ? completed.map((item) => <ListingRow key={item.id} listing={item} />) : <p className="empty-copy">No completed listings yet.</p>}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
-};
-
+}

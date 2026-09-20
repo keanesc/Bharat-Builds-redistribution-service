@@ -1,124 +1,80 @@
-import React from "react";
-import type { Role } from "../../../shared/src/types.js";
-import { DEMO_RESPONDERS, DEMO_RESTAURANTS } from "../mock.js";
-import { RefreshCw, HeartHandshake, Utensils, Shield, ChevronDown } from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import type { ResponderProfile, Role } from "../../../shared/src/types.js";
 
 interface NavbarProps {
   role: Role;
   actorId: string;
+  responders: ResponderProfile[];
+  isRefreshing: boolean;
+  demoMode: boolean;
   onRoleChange: (role: Role) => void;
   onActorChange: (actorId: string) => void;
   onRefresh: () => void;
-  isRefreshing: boolean;
-  demoMode: boolean;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({
+const roles: Array<{ value: Role; label: string }> = [
+  { value: "RESTAURANT", label: "Restaurant" },
+  { value: "RESPONDER", label: "Responder" },
+  { value: "ADMIN", label: "Admin" }
+];
+
+export function Navbar({
   role,
   actorId,
+  responders,
+  isRefreshing,
+  demoMode,
   onRoleChange,
   onActorChange,
-  onRefresh,
-  isRefreshing,
-  demoMode
-}) => {
+  onRefresh
+}: NavbarProps) {
   return (
-    <header className="navbar-header">
-      <div className="navbar-top-row">
-        {/* Brand identity */}
-        <div className="brand-lockup">
-          <img src="/logo.jpg" alt="RescueRadius" className="brand-logo-img" />
+    <header className="app-header">
+      <div className="header-inner">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">R</span>
           <div>
-            <h1 className="brand-title">RescueRadius</h1>
-            <p className="brand-tagline">Surplus food dispatch · <span className="brand-city">ಬೆಂಗಳೂರು</span></p>
+            <strong>RescueRadius</strong>
+            <span>Surplus food coordination</span>
           </div>
+          <span className="demo-label">{demoMode ? "Local demo" : "Demo identity"}</span>
         </div>
 
-        {/* Minimal controls */}
-        <div className="navbar-status-group">
-          <button
-            type="button"
-            className="navbar-refresh-btn"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            title="Refresh listings"
-          >
-            <RefreshCw size={14} className={isRefreshing ? "spin-animation" : ""} />
-          </button>
-        </div>
-      </div>
+        <nav className="role-tabs" aria-label="Application role">
+          {roles.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className={role === item.value ? "role-tab active" : "role-tab"}
+              aria-current={role === item.value ? "page" : undefined}
+              onClick={() => onRoleChange(item.value)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
 
-      {/* Role Navigation & Persona Bar */}
-      <div className="navbar-control-bar">
-        {/* Role Tabs */}
-        <div className="role-tabs-container" role="tablist" aria-label="Application Role">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={role === "RESPONDER"}
-            className={`role-tab-btn ${role === "RESPONDER" ? "active" : ""}`}
-            onClick={() => onRoleChange("RESPONDER")}
-          >
-            <HeartHandshake size={15} />
-            <span>Responder</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={role === "RESTAURANT"}
-            className={`role-tab-btn ${role === "RESTAURANT" ? "active" : ""}`}
-            onClick={() => onRoleChange("RESTAURANT")}
-          >
-            <Utensils size={15} />
-            <span>Kitchen</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={role === "ADMIN"}
-            className={`role-tab-btn ${role === "ADMIN" ? "active" : ""}`}
-            onClick={() => onRoleChange("ADMIN")}
-          >
-            <Shield size={15} />
-            <span>Admin</span>
-          </button>
-        </div>
-
-        {/* Persona Selector */}
-        <div className="actor-switcher-wrap">
-          <select
-            id="actor-select"
-            className="actor-dropdown"
-            value={actorId}
-            onChange={(e) => onActorChange(e.target.value)}
-          >
-            {role === "RESPONDER" && (
-              <>
-                {DEMO_RESPONDERS.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} · {r.capacityMeals} capacity
-                  </option>
-                ))}
-              </>
-            )}
-
-            {role === "RESTAURANT" && (
-              <>
-                {DEMO_RESTAURANTS.map((rest) => (
-                  <option key={rest.id} value={rest.id}>
-                    {rest.name} · {rest.area}
-                  </option>
-                ))}
-              </>
-            )}
-
-            {role === "ADMIN" && (
-              <option value="admin-001">City Ops Coordinator</option>
-            )}
+        <div className="header-actions">
+          <label className="sr-only" htmlFor="actor-select">Demo actor</label>
+          <select id="actor-select" value={actorId} onChange={(event) => onActorChange(event.target.value)}>
+            {role === "RESPONDER" && responders.map((profile) => (
+              <option key={profile.id} value={profile.id}>{profile.name}</option>
+            ))}
+            {role === "RESTAURANT" && <option value="restaurant-001">Koramangala Kitchen</option>}
+            {role === "ADMIN" && <option value="admin-001">City operations</option>}
           </select>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Refresh current view"
+            title="Refresh"
+            disabled={isRefreshing}
+            onClick={onRefresh}
+          >
+            <RefreshCw size={17} className={isRefreshing ? "rotating" : undefined} />
+          </button>
         </div>
       </div>
     </header>
   );
-};
-
+}

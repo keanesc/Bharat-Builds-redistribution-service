@@ -35,6 +35,7 @@ All error responses use:
 | `NOT_FOUND` | 404 | Resource does not exist |
 | `CLAIM_CONFLICT` | 409 | Listing already claimed, cancelled, or expired |
 | `STATUS_CONFLICT` | 409 | Status transition not allowed for this actor/state |
+| `FORBIDDEN` | 403 | The actor role cannot use the requested operation |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 
 ---
@@ -106,6 +107,22 @@ No auth required.
 
 ---
 
+## `GET /listings/mine`
+
+Requires `X-Demo-Actor`. Restaurant actors receive listings they created. Responder actors receive all listings assigned to them, including completed and cancelled records. Results are sorted by `createdAt` descending.
+
+**Response 200:**
+```json
+{ "listings": [/* full SurplusListing objects */] }
+```
+
+Admin actors receive:
+```json
+{ "error": "FORBIDDEN", "message": "Admin actors do not have personal listings" }
+```
+
+---
+
 ## `POST /listings`
 
 Requires `X-Demo-Actor` with a known demo actor ID. Role-specific authorization is not yet enforced for this demo route.
@@ -173,8 +190,6 @@ POST /listings/{id}/cancel   — CLAIMED → CANCELLED
 
 ## `GET /profiles`
 
-Handler contract only: this route is not present in the current CDK stack and is not available from `ApiUrl` yet.
-
 No auth required. Returns all seeded responder profiles.
 
 **Response 200:**
@@ -200,8 +215,6 @@ No auth required. Returns all seeded responder profiles.
 
 ## `GET /profiles/{id}`
 
-Handler contract only: this route is not present in the current CDK stack and is not available from `ApiUrl` yet.
-
 No auth required.
 
 **Response 200:** Single `ResponderProfile` object.
@@ -215,7 +228,7 @@ No auth required.
 
 ## `POST /notifications/events`
 
-Handler contract only: this route is not present in the current CDK stack, and lifecycle handlers do not emit these events yet.
+This route is wired in CDK, but lifecycle handlers do not emit these events and no end-user delivery channel is configured yet.
 
 Requires `X-Demo-Actor`.
 

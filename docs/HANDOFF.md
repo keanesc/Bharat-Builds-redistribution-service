@@ -1,5 +1,14 @@
 # Person 1 handoff
 
+## 2026-09-20 frontend integration pass
+
+- Merged `origin/nikhil-frontend` into `keane-development` and replaced the prototype presentation with role-focused restaurant, responder, and admin views.
+- Added the approved `GET /listings/mine` route. Restaurants receive their own listings; responders receive assigned work; admin actors receive `403 FORBIDDEN`.
+- The personal-listings read model uses a paginated table scan for hackathon scale. The listings Lambda now has `dynamodb:Scan` in addition to its existing table operations.
+- Frontend live and demo adapters now share whole-listing claim, terminal cancellation, actor-owned pickup/delivery, and availability-only feed semantics.
+- Added frontend unit/component tests. Repository typecheck, backend tests, frontend tests, production build, and visual role-flow checks pass locally.
+- The new route is represented in CDK but has not been deployed in this pass. Deployed-mode personal history requires a standard reviewed CDK deployment before final two-browser acceptance.
+
 ## 2026-09-19 Keane work pass
 
 This pass took five bounded items: expose the existing profile handler, expose the existing notification-event handler, verify pickup confirmation behavior, verify pickup AWS wiring, and audit AWS deployment readiness.
