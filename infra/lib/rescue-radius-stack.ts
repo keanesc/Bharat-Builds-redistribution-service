@@ -72,6 +72,16 @@ export class RescueRadiusStack extends cdk.Stack {
       functionName: "rescue-radius-dashboard",
       entry: path.join(backendHandlers, "dashboard.ts")
     });
+    const profiles = new nodejs.NodejsFunction(this, "ProfilesFunction", {
+      ...commonFunctionProps,
+      functionName: "rescue-radius-profiles",
+      entry: path.join(backendHandlers, "profiles.ts")
+    });
+    const notifications = new nodejs.NodejsFunction(this, "NotificationsFunction", {
+      ...commonFunctionProps,
+      functionName: "rescue-radius-notifications",
+      entry: path.join(backendHandlers, "notifications.ts")
+    });
 
     // Keep each Lambda role scoped to the DynamoDB operations its handler uses.
     // Health is intentionally data-free and receives no DynamoDB permissions.
@@ -95,8 +105,12 @@ export class RescueRadiusStack extends cdk.Stack {
       actions: ["dynamodb:Scan"],
       resources: [listingsTable.tableArn]
     }));
+    profiles.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["dynamodb:GetItem", "dynamodb:Scan"],
+      resources: [profilesTable.tableArn]
+    }));
 
-    for (const fn of [health, listings, claims, status, dashboard]) {
+    for (const fn of [health, listings, claims, status, dashboard, profiles, notifications]) {
       new logs.LogGroup(this, `${fn.node.id}LogGroup`, {
         logGroupName: `/aws/lambda/${fn.functionName}`,
         retention: logs.RetentionDays.ONE_WEEK,
@@ -144,6 +158,21 @@ export class RescueRadiusStack extends cdk.Stack {
       path: "/dashboard/impact",
       methods: [apigatewayv2.HttpMethod.GET],
       integration: new integrations.HttpLambdaIntegration("DashboardIntegration", dashboard)
+    });
+    api.addRoutes({
+      path: "/profiles",
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: new integrations.HttpLambdaIntegration("ProfilesIntegration", profiles)
+    });
+    api.addRoutes({
+      path: "/profiles/{id}",
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: new integrations.HttpLambdaIntegration("ProfileByIdIntegration", profiles)
+    });
+    api.addRoutes({
+      path: "/notifications/events",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: new integrations.HttpLambdaIntegration("NotificationsIntegration", notifications)
     });
 
     new cdk.CfnOutput(this, "ApiUrl", { value: api.apiEndpoint });
